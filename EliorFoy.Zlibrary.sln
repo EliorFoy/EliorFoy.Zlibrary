@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EliorFoy.Zlibrary.CLI", "EliorFoy.Zlibrary.CLI\EliorFoy.Zlibrary.CLI.csproj", "{C8E8F494-16E1-413E-BF4C-642C38BFE23E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EliorFoy.Zlibrary.GUI", "EliorFoy.Zlibrary.GUI\EliorFoy.Zlibrary.GUI.csproj", "{4AA984C9-5BD2-4946-8610-01EA1DCF4585}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C8E8F494-16E1-413E-BF4C-642C38BFE23E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8E8F494-16E1-413E-BF4C-642C38BFE23E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8E8F494-16E1-413E-BF4C-642C38BFE23E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C8E8F494-16E1-413E-BF4C-642C38BFE23E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4AA984C9-5BD2-4946-8610-01EA1DCF4585}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4AA984C9-5BD2-4946-8610-01EA1DCF4585}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4AA984C9-5BD2-4946-8610-01EA1DCF4585}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4AA984C9-5BD2-4946-8610-01EA1DCF4585}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
