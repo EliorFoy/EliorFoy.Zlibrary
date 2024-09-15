@@ -11,7 +11,8 @@ namespace EliorFoy.Zlibrary.CLI
         static void Main()
         {
             var downloader = new Downloader();
-            downloader.Search("花书",1);
+            //var s = AccountPool.CheckTheRestDownloadNum("35246529", "805952563b5da47b2e477aad04be3c9a").Result;
+            Console.WriteLine(AccountPool.CheckAvaliability("35246529", "805952563b5da47b2e477aad04be3c9a").Result);
             Console.ReadLine();
         }
     }
