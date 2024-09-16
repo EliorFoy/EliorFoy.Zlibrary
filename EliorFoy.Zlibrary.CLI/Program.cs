@@ -12,7 +12,9 @@ namespace EliorFoy.Zlibrary.CLI
         {
             var downloader = new Downloader();
             //var s = AccountPool.CheckTheRestDownloadNum("35246529", "805952563b5da47b2e477aad04be3c9a").Result;
-            Console.WriteLine(AccountPool.CheckAvaliability("35246529", "805952563b5da47b2e477aad04be3c9a").Result);
+            //Console.WriteLine(AccountPool.CheckAvaliability("35246529", "805952563b5da47b2e477aad04be3c9a").Result);
+            
+            downloader.Search("数值", 1).Wait();
             Console.ReadLine();
         }
     }

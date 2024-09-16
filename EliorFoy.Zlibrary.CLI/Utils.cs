@@ -149,11 +149,35 @@ namespace EliorFoy.Zlibrary.CLI
             Console.WriteLine("代理转换成功！");
         }
 
+        public async Task Download(Book[] books)
+        {
+            Console.WriteLine(books.Length);
+            List<Task> taskList = new List<Task>();
+            var cookieContainer = new CookieContainer();
+            cookieContainer.Add(new Cookie("__cryproxy",this.proxy) { Domain = "webproxy.lumiproxy.com" });
+            cookieContainer.Add(new Cookie("remix_userkey|1lib.sk", "805952563b5da47b2e477aad04be3c9a") { Domain = "webproxy.lumiproxy.com" });
+            cookieContainer.Add(new Cookie("remix_userid|1lib.sk", "35246529") { Domain = "webproxy.lumiproxy.com" });
+            foreach(var book in books)
+            {
+                Console.WriteLine(book.DownloadUrl);
+                var task = book.DownloadUrl
+                .WithHeader("cookie", $"remix_userid|1lib.sk=35246529; remix_userkey|1lib.sk=805952563b5da47b2e477aad04be3c9a; __cryproxy={this.proxy}")
+                .WithTimeout(TimeSpan.FromHours(1))
+                .DownloadFileAsync(@"C:\Users\DELL123\Desktop\test", $"{book.Title}.pdf");
+                taskList.Append(task);
+                await Console.Out.WriteLineAsync($"{book.Title}下载完成！");
+            }
+            Task.WaitAll(taskList.ToArray());
+            await books[0].DownloadUrl
+                .WithHeader("cookie", $"remix_userid|1lib.sk=35246529; remix_userkey|1lib.sk=805952563b5da47b2e477aad04be3c9a; __cryproxy={this.proxy}")
+                .WithTimeout(TimeSpan.FromHours(1))
+                .DownloadFileAsync(@"C:\Users\DELL123\Desktop\test", $"{books[0].Title}.pdf");
+            Console.WriteLine("全部书籍下载完成！");
+        }
+
         public async Task Search(string bookName, int searchPage)
         {
-            var cookieContainer = new CookieContainer();
-            cookieContainer.Add(new Cookie("remix_userkey|1lib.sk", "805952563b5da47b2e477aad04be3c9a") { Domain= "webproxy.lumiproxy.com" });
-            cookieContainer.Add(new Cookie("remix_userid|1lib.sk", "35246529") { Domain= "webproxy.lumiproxy.com" });
+            
             var respon = await "https://webproxy.lumiproxy.com/s".AppendPathSegment(bookName)
                     .SetQueryParams(new { page = searchPage }) // 直接传递匿名对象
                     //.WithCookies(this.Cookies)
@@ -162,12 +186,7 @@ namespace EliorFoy.Zlibrary.CLI
             Console.WriteLine(respon.StatusCode);
             var result =await respon.GetStringAsync();
 
-            //var path = await "https://webproxy.lumiproxy.com/sencure/7o2ChHIVkjg8oxGcbuXRh"
-            //    .WithCookies(this.Cookies)
-            //    .WithCookies(cookieContainer)
-            //    .WithTimeout(TimeSpan.FromHours(1))
-            //    .DownloadFileAsync(@"C:\Users\DELL123\Desktop\test", "1.pdf");
-            //Console.WriteLine("下载完成！");
+            
             if (result.Contains("登录"))
             {
                 Console.WriteLine("登陆失败！");
@@ -200,16 +219,27 @@ namespace EliorFoy.Zlibrary.CLI
                     var fileNode = node.SelectSingleNode(".//div[@class='bookProperty property__file']/div[@class='property_value ']");
                     var file = fileNode?.InnerText;
                     var pulisher = node.SelectSingleNode(".//a[@title='Publisher']")?.InnerText;
-                    Console.WriteLine($"Title: {title}");
-                    Console.WriteLine($"Author: {author}");
-                    Console.WriteLine($"ISBN: {isbn}");
-                    Console.WriteLine($"Publisher:{pulisher}");
-                    Console.WriteLine($"Year: {year}");
-                    Console.WriteLine($"Language: {language}");
-                    Console.WriteLine($"File: {file}");
-                    Console.WriteLine($"Book Image URL: {bookImageUrl}");
+                    var refUrl = node.SelectSingleNode(".//z-cover").SelectSingleNode(".//a")?.GetAttributeValue("href", "");
+                    var detailHtml = refUrl
+                        .WithHeader("cookie", "remix_userid|1lib.sk=35246529; remix_userkey|1lib.sk=805952563b5da47b2e477aad04be3c9a; __cryproxy=eyJVcmwiOiJodHRwczovL3poLjFsaWIuc2svIiwiQXJlYSI6IlVTIiwiS2V5IjoiUk5UR05LTU9sendJV3duT1o0UDhFIn0%3D")
+                        .WithTimeout(TimeSpan.FromHours(1))
+                        .GetStringAsync().Result;
+                    var doc = new HtmlDocument();
+                    doc.LoadHtml(detailHtml);
+                    var downloadUrl = doc.DocumentNode.SelectSingleNode("//a[@class='addDownloadedBook premiumBtn']").GetAttributeValue("href", "");
+                    Console.WriteLine(downloadUrl);
+                    //Console.WriteLine($"Title: {title}");
+                    //Console.WriteLine($"Author: {author}");
+                    //Console.WriteLine($"ISBN: {isbn}");
+                    //Console.WriteLine($"Publisher:{pulisher}");
+                    //Console.WriteLine($"Year: {year}");
+                    //Console.WriteLine($"Language: {language}");
+                    //Console.WriteLine($"File: {file}");
+                    //Console.WriteLine($"Book Image URL: {bookImageUrl}");
                     Console.WriteLine("===========================================================================================================");
-                    var newBook = new Book(title, author, isbn, year, language, file, bookImageUrl);
+                    var newBook = new Book(title, author, isbn, year, language, file, bookImageUrl,downloadUrl);
+                    Download(new Book[] { newBook}).Wait();
+                    return;
                 }
             }  
         }
@@ -222,17 +252,20 @@ namespace EliorFoy.Zlibrary.CLI
         public string ISBN { get; set; }
         public string Year { get; set; }
         public string Language { get; set; }
-        public string File {  get; set; }
+        public string File { get; set; }
         public string BookImage { get; set; }
-        public Book(string title, string author, string iSBN, string year, string language, string file, string bookImage)
+        public string DownloadUrl { get; set; }
+
+        public Book(string title, string author, string isbn, string year, string language, string file, string bookImage, string downloadUrl)
         {
             Title = title;
             Author = author;
-            ISBN = iSBN;
+            ISBN = isbn;
             Year = year;
             Language = language;
             File = file;
             BookImage = bookImage;
+            DownloadUrl = downloadUrl;
         }
     }
-}
+ }
