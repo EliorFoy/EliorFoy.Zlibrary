@@ -6,10 +6,11 @@ using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 using System.Net;
 using System.Runtime.CompilerServices;
+using static System.Reflection.Metadata.BlobBuilder;
+using System.IO;
 
 namespace EliorFoy.Zlibrary.CLI
 {
-
 
     public static class AccountPool
     {
@@ -70,7 +71,7 @@ namespace EliorFoy.Zlibrary.CLI
                 {
                     // 处理其他异常
                     Console.WriteLine($"An error occurred: {ex.Message}");
-                    throw; // 根据需要重新抛出异常或进行其他处理
+                    Console.WriteLine($"代理获取第{i+2}次尝试中...");
                 }
             }
 
@@ -109,6 +110,17 @@ namespace EliorFoy.Zlibrary.CLI
             var respon = await "https://webproxy.lumiproxy.com/s"
                    .WithHeader("cookie", $"remix_userid|1lib.sk={userId}; remix_userkey|1lib.sk={userKey}; __cryproxy={proxy}")
                    .GetStringAsync();
+            if (respon.Contains("登录"))
+            {
+                Console.WriteLine("登陆失败！");
+                Console.WriteLine($"remix_userid|1lib.sk={userId}; remix_userkey|1lib.sk={userKey}; __cryproxy={proxy}");
+                return "Bad";
+            }
+            else
+            {
+                Console.WriteLine("登录成功！");
+                Console.WriteLine($"remix_userid|1lib.sk={userId}; remix_userkey|1lib.sk={userKey}; __cryproxy={proxy}");
+            }
             var htmlDoc = new HtmlDocument();
             htmlDoc.LoadHtml(respon);
             var node = htmlDoc.DocumentNode
@@ -117,19 +129,60 @@ namespace EliorFoy.Zlibrary.CLI
             return node.InnerText.Trim();
         }
 
-        public static async Task<bool> CheckAvaliability(string userId, string userKey)
+        public static async Task<int> CheckAvaliability(string userId, string userKey)
         {
             var numString = await CheckTheRestDownloadNum(userId, userKey);
+            if(numString == "Bad") { return 3; }
             var num = int.Parse(numString.Split("/")[0]) / int.Parse(numString.Split("/")[1]);
-            if (num < 1) return true;
-            else return false;
+            if (num < 1) return 1;
+            else return 0;
         }
 
+        public async Task CreateAvaliableAccountPoolForOnce()
+        {
+            System.IO.File.Delete(@"AccountPoolForOnce.db"); //重置
+            using (var dbOnce = new LiteDatabase(@"AccountPoolForOnce.db"))
+            {
+                using (var db = new LiteDatabase(@"AccountPool.db"))
+                {
+
+                }
+            }
+            
+        }
+        public static async Task<UserAccount> GetUserAccount()
+        {
+            using (var db = new LiteDatabase(@"AccountPool.db"))
+            {
+                var collection = db.GetCollection<UserAccount>("users");
+                List<Task> tasks = new List<Task>();
+                foreach (var account in collection.FindAll())
+                {
+                    tasks.Add(Task.Run(async Task<UserAccount> () => 
+                    {
+                        switch (await CheckAvaliability(account.Userid, account.UserKey))
+                        {
+                            case 0: //已经满了
+                                return new UserAccount("", "");
+                            case 1: //账号满足要求
+                                return account;
+                            case 2:
+                                collection.DeleteMany(a => a.Userid == account.Userid && a.UserKey == account.UserKey);
+                                return new UserAccount("", "");
+                        }
+                    }));
+                    
+                }
+            }
+            return new UserAccount("",""); //都满了
+        }
     }
     public class UserAccount
     {
         public string Userid { get; set; }
         public string UserKey { get; set; }
+
+        public string Rest {  get; set; }
 
         public UserAccount(string userid, string userkey)
         {
@@ -142,70 +195,73 @@ namespace EliorFoy.Zlibrary.CLI
     {
         private string _url = "https://webproxy.lumiproxy.com/request?area=US&u=https://zh.1lib.sk/";
         public string proxy {  get; set; }
+        private string userId {  get; set; }
+        private string userKey { get; set; }
         
-        public Downloader()
+        public Downloader(string userId,string UserKey)
         {
+            this.userId = userId;
+            this.userKey = UserKey;
             this.proxy = this.GetProxyAsync();
-            Console.WriteLine("代理转换成功！");
+            Console.WriteLine("代理初始化成功！");
         }
 
         public async Task Download(Book[] books)
         {
-            Console.WriteLine(books.Length);
+            Console.WriteLine($"开始下载{books[0].Title}");
+            var detailHtml = books[0].RefUrl
+                .WithHeader("cookie", $"remix_userid|1lib.sk={userId} remix_userkey|1lib.sk={userKey}; __cryproxy=eyJVcmwiOiJodHRwczovL3poLjFsaWIuc2svIiwiQXJlYSI6IlVTIiwiS2V5IjoiUk5UR05LTU9sendJV3duT1o0UDhFIn0%3D")
+                .WithTimeout(TimeSpan.FromHours(1))
+                .GetStringAsync().Result;
+            var doc = new HtmlDocument();
+            doc.LoadHtml(detailHtml);
+            var downloadUrl = doc.DocumentNode.SelectSingleNode("//a[@class='addDownloadedBook premiumBtn']").GetAttributeValue("href", "");
+
             List<Task> taskList = new List<Task>();
             var cookieContainer = new CookieContainer();
             cookieContainer.Add(new Cookie("__cryproxy",this.proxy) { Domain = "webproxy.lumiproxy.com" });
-            cookieContainer.Add(new Cookie("remix_userkey|1lib.sk", "805952563b5da47b2e477aad04be3c9a") { Domain = "webproxy.lumiproxy.com" });
-            cookieContainer.Add(new Cookie("remix_userid|1lib.sk", "35246529") { Domain = "webproxy.lumiproxy.com" });
+            cookieContainer.Add(new Cookie("remix_userkey|1lib.sk", userKey) { Domain = "webproxy.lumiproxy.com" });
+            cookieContainer.Add(new Cookie("remix_userid|1lib.sk", userId) { Domain = "webproxy.lumiproxy.com" });
             foreach(var book in books)
             {
-                Console.WriteLine(book.DownloadUrl);
-                var task = book.DownloadUrl
-                .WithHeader("cookie", $"remix_userid|1lib.sk=35246529; remix_userkey|1lib.sk=805952563b5da47b2e477aad04be3c9a; __cryproxy={this.proxy}")
-                .WithTimeout(TimeSpan.FromHours(1))
-                .DownloadFileAsync(@"C:\Users\DELL123\Desktop\test", $"{book.Title}.pdf");
+                var format = book.File.Split(",")[0].Trim().ToLower();
+                Console.WriteLine(downloadUrl);
+                var task = downloadUrl
+                .WithHeader("cookie", $"remix_userid|1lib.sk={userId}; remix_userkey|1lib.sk={userKey}; __cryproxy={this.proxy}")
+                .WithTimeout(TimeSpan.FromMinutes(5))
+                .DownloadFileAsync(@"C:\Users\DELL123\Desktop\test", $"{book.Title}.{format}");
                 taskList.Append(task);
-                await Console.Out.WriteLineAsync($"{book.Title}下载完成！");
+                await task;
+                await Console.Out.WriteLineAsync($"{book.Title}.{format}下载完成！");
             }
             Task.WaitAll(taskList.ToArray());
-            await books[0].DownloadUrl
-                .WithHeader("cookie", $"remix_userid|1lib.sk=35246529; remix_userkey|1lib.sk=805952563b5da47b2e477aad04be3c9a; __cryproxy={this.proxy}")
-                .WithTimeout(TimeSpan.FromHours(1))
-                .DownloadFileAsync(@"C:\Users\DELL123\Desktop\test", $"{books[0].Title}.pdf");
-            Console.WriteLine("全部书籍下载完成！");
+            //await downloadUrl
+            //    .WithHeader("cookie", $"remix_userid|1lib.sk=35246529; remix_userkey|1lib.sk=805952563b5da47b2e477aad04be3c9a; __cryproxy={this.proxy}")
+            //    .WithTimeout(TimeSpan.FromHours(1))
+            //    .DownloadFileAsync(@"C:\Users\DELL123\Desktop\test", $"{books[0].Title}.pdf");
+            //await Console.Out.WriteLineAsync($"全部书籍下载完成！");
         }
 
-        public async Task Search(string bookName, int searchPage)
+        public async Task<List<Book>> Search(string bookName, int searchPage)
         {
             
             var respon = await "https://webproxy.lumiproxy.com/s".AppendPathSegment(bookName)
                     .SetQueryParams(new { page = searchPage }) // 直接传递匿名对象
-                    //.WithCookies(this.Cookies)
-                    .WithHeader("cookie", "remix_userid|1lib.sk=35246529; remix_userkey|1lib.sk=805952563b5da47b2e477aad04be3c9a; __cryproxy=eyJVcmwiOiJodHRwczovL3poLjFsaWIuc2svIiwiQXJlYSI6IlVTIiwiS2V5IjoiUk5UR05LTU9sendJV3duT1o0UDhFIn0%3D")
+                                                               //.WithCookies(this.Cookies)
+                    .WithHeader("cookie", $"remix_userid|1lib.sk={userId}; remix_userkey|1lib.sk={userKey}; __cryproxy={this.proxy}")
                     .GetAsync();
             Console.WriteLine(respon.StatusCode);
             var result =await respon.GetStringAsync();
 
             
-            if (result.Contains("登录"))
-            {
-                Console.WriteLine("登陆失败！");
-            }
-            else
-            {
-                Console.WriteLine("登录成功！");
-            }
-            //var cookies = res.Cookies;
-            //foreach(var cookie in cookies)
-            //{
-            //    Console.WriteLine(cookie.Name);
-            //    Console.WriteLine(cookie.Value);
-            //}
+            
             var htmlDoc = new HtmlDocument();
             htmlDoc.LoadHtml(result);
-            var nodes = htmlDoc.DocumentNode.SelectNodes("//div[@class='resItemBox resItemBoxBooks exactMatch']"); 
+            var nodes = htmlDoc.DocumentNode.SelectNodes("//div[@class='resItemBox resItemBoxBooks exactMatch']");
+            List<Book> books = new List<Book>();
             if (nodes != null)
             {
+                int index = 1;
                 foreach (var node in nodes)
                 {
                     var author = node.SelectSingleNode(".//z-cover")?.GetAttributeValue("author", string.Empty);
@@ -220,28 +276,25 @@ namespace EliorFoy.Zlibrary.CLI
                     var file = fileNode?.InnerText;
                     var pulisher = node.SelectSingleNode(".//a[@title='Publisher']")?.InnerText;
                     var refUrl = node.SelectSingleNode(".//z-cover").SelectSingleNode(".//a")?.GetAttributeValue("href", "");
-                    var detailHtml = refUrl
-                        .WithHeader("cookie", "remix_userid|1lib.sk=35246529; remix_userkey|1lib.sk=805952563b5da47b2e477aad04be3c9a; __cryproxy=eyJVcmwiOiJodHRwczovL3poLjFsaWIuc2svIiwiQXJlYSI6IlVTIiwiS2V5IjoiUk5UR05LTU9sendJV3duT1o0UDhFIn0%3D")
-                        .WithTimeout(TimeSpan.FromHours(1))
-                        .GetStringAsync().Result;
-                    var doc = new HtmlDocument();
-                    doc.LoadHtml(detailHtml);
-                    var downloadUrl = doc.DocumentNode.SelectSingleNode("//a[@class='addDownloadedBook premiumBtn']").GetAttributeValue("href", "");
-                    Console.WriteLine(downloadUrl);
-                    //Console.WriteLine($"Title: {title}");
-                    //Console.WriteLine($"Author: {author}");
-                    //Console.WriteLine($"ISBN: {isbn}");
-                    //Console.WriteLine($"Publisher:{pulisher}");
-                    //Console.WriteLine($"Year: {year}");
-                    //Console.WriteLine($"Language: {language}");
-                    //Console.WriteLine($"File: {file}");
-                    //Console.WriteLine($"Book Image URL: {bookImageUrl}");
+                    Console.WriteLine($"书本号:{index}");
+                    Console.WriteLine($"标题: {title}");
+                    Console.WriteLine($"作者: {author}");
+                    Console.WriteLine($"ISBN: {isbn}");
+                    Console.WriteLine($"出版社:{pulisher}");
+                    Console.WriteLine($"年份: {year}");
+                    Console.WriteLine($"语言: {language}");
+                    Console.WriteLine($"文件信息: {file}");
+                    Console.WriteLine($"详细页面地址:{refUrl}");
+                    Console.WriteLine($"封面: {bookImageUrl}");
                     Console.WriteLine("===========================================================================================================");
-                    var newBook = new Book(title, author, isbn, year, language, file, bookImageUrl,downloadUrl);
-                    Download(new Book[] { newBook}).Wait();
-                    return;
+                    var newBook = new Book(index,title, author, isbn, year, language, file, bookImageUrl,refUrl);
+                    books.Add(newBook);
+                    index++;
+                    //Download(new Book[] { newBook}).Wait();
                 }
-            }  
+                
+            }
+            return books;
         }
     }
 
@@ -254,10 +307,13 @@ namespace EliorFoy.Zlibrary.CLI
         public string Language { get; set; }
         public string File { get; set; }
         public string BookImage { get; set; }
-        public string DownloadUrl { get; set; }
+        public string RefUrl { get; set; }
 
-        public Book(string title, string author, string isbn, string year, string language, string file, string bookImage, string downloadUrl)
+        public int Index { get; set; }
+
+        public Book(int index,string title, string author, string isbn, string year, string language, string file, string bookImage, string refUrl)
         {
+            Index = index;
             Title = title;
             Author = author;
             ISBN = isbn;
@@ -265,7 +321,7 @@ namespace EliorFoy.Zlibrary.CLI
             Language = language;
             File = file;
             BookImage = bookImage;
-            DownloadUrl = downloadUrl;
+            RefUrl = refUrl;
         }
     }
  }
