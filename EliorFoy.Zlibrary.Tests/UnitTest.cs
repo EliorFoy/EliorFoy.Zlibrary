@@ -14,7 +14,6 @@ namespace EliorFoy.Zlibrary.Tests
         [Test]
         public void Test1()
         {
-            AccountPool.Refresh();
             Assert.Pass();
         }
     }

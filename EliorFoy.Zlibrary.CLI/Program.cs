@@ -11,9 +11,10 @@ namespace EliorFoy.Zlibrary.CLI
         static void Main()
         {
 
+            AccountPool.CreateAvaliableAccountPoolForOnce().Wait();
             var account = AccountPool.GetUserAccount().Result;
             var downloader = new Downloader(account.Userid,account.UserKey);
-
+            Console.WriteLine("创建一次性账号池成功");
             while (true)
             {
                 Console.Write("请输入需要下载的书籍：");

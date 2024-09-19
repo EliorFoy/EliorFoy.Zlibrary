@@ -8,6 +8,8 @@ using System.Net;
 using System.Runtime.CompilerServices;
 using static System.Reflection.Metadata.BlobBuilder;
 using System.IO;
+using Newtonsoft.Json;
+using System.ComponentModel.Design;
 
 namespace EliorFoy.Zlibrary.CLI
 {
@@ -116,16 +118,24 @@ namespace EliorFoy.Zlibrary.CLI
                 Console.WriteLine($"remix_userid|1lib.sk={userId}; remix_userkey|1lib.sk={userKey}; __cryproxy={proxy}");
                 return "Bad";
             }
+            else if(respon.Contains("Too many requests from your"))
+            {
+                Console.WriteLine("ip限制中...");
+                await Task.Delay(5000);
+                return await CheckTheRestDownloadNum(userId, userKey);
+            }
             else
             {
                 Console.WriteLine("登录成功！");
                 Console.WriteLine($"remix_userid|1lib.sk={userId}; remix_userkey|1lib.sk={userKey}; __cryproxy={proxy}");
             }
+            
             var htmlDoc = new HtmlDocument();
             htmlDoc.LoadHtml(respon);
             var node = htmlDoc.DocumentNode
                 .SelectSingleNode("//div[@class='caret-scroll']")
                 .SelectSingleNode(".//div[@class='caret-scroll__title']");
+            Console.WriteLine(node.InnerText.Trim());
             return node.InnerText.Trim();
         }
 
@@ -138,51 +148,54 @@ namespace EliorFoy.Zlibrary.CLI
             else return 0;
         }
 
-        public async Task CreateAvaliableAccountPoolForOnce()
+        public static async Task CreateAvaliableAccountPoolForOnce()
         {
             System.IO.File.Delete(@"AccountPoolForOnce.db"); //重置
             using (var dbOnce = new LiteDatabase(@"AccountPoolForOnce.db"))
             {
                 using (var db = new LiteDatabase(@"AccountPool.db"))
                 {
+                    var collection = db.GetCollection<UserAccount>("users");
+                    List<Task> tasks = new List<Task>();
+                    foreach (var account in collection.FindAll())
+                    {
+                        tasks.Add(Task.Run(async () =>
+                        {
+                            switch (await CheckAvaliability(account.Userid, account.UserKey))
+                            {
+                                case 0: //已经满了
+                                    break;
+                                case 1: //账号满足要求
+                                    Console.ForegroundColor = ConsoleColor.Green;
+                                    Console.WriteLine("账号池添加一个可用账号！");
+                                    Console.ResetColor();
+                                    var collectionOnce = dbOnce.GetCollection<UserAccount>("users");
+                                    collectionOnce.Insert(account);
+                                    break;
+                                case 2:
+                                    break; //不能登录，跳过
+                            }
+                        }));
 
+                    }
+                    await Task.WhenAll(tasks);
                 }
             }
             
         }
         public static async Task<UserAccount> GetUserAccount()
         {
-            using (var db = new LiteDatabase(@"AccountPool.db"))
+            using (var db = new LiteDatabase(@"AccountPoolForOnce.db"))
             {
                 var collection = db.GetCollection<UserAccount>("users");
-                List<Task> tasks = new List<Task>();
-                foreach (var account in collection.FindAll())
-                {
-                    tasks.Add(Task.Run(async Task<UserAccount> () => 
-                    {
-                        switch (await CheckAvaliability(account.Userid, account.UserKey))
-                        {
-                            case 0: //已经满了
-                                return new UserAccount("", "");
-                            case 1: //账号满足要求
-                                return account;
-                            case 2:
-                                collection.DeleteMany(a => a.Userid == account.Userid && a.UserKey == account.UserKey);
-                                return new UserAccount("", "");
-                        }
-                    }));
-                    
-                }
+                return collection.Find(_ => true).FirstOrDefault();
             }
-            return new UserAccount("",""); //都满了
         }
     }
     public class UserAccount
     {
         public string Userid { get; set; }
         public string UserKey { get; set; }
-
-        public string Rest {  get; set; }
 
         public UserAccount(string userid, string userkey)
         {
@@ -215,8 +228,28 @@ namespace EliorFoy.Zlibrary.CLI
                 .GetStringAsync().Result;
             var doc = new HtmlDocument();
             doc.LoadHtml(detailHtml);
-            var downloadUrl = doc.DocumentNode.SelectSingleNode("//a[@class='addDownloadedBook premiumBtn']").GetAttributeValue("href", "");
-
+            var bookId = doc.DocumentNode.SelectSingleNode("//a[@class='btn btn-primary dlButton addDownloadedBook reader-link']").GetAttributeValue("data-book_id", "");
+            Console.WriteLine(bookId);
+            var formats = await $"https://webproxy.lumiproxy.com/papi/book/{bookId}/formats"
+                .WithHeader("cookie", $"remix_userid|1lib.sk={userId} remix_userkey|1lib.sk={userKey}; __cryproxy=eyJVcmwiOiJodHRwczovL3poLjFsaWIuc2svIiwiQXJlYSI6IlVTIiwiS2V5IjoiUk5UR05LTU9sendJV3duT1o0UDhFIn0%3D")
+                .GetStringAsync();
+            Console.WriteLine(formats);
+            dynamic formatsJson = JsonConvert.DeserializeObject<dynamic>(formats);
+            string? extensionUrl = null;
+            if (formatsJson.books != null)
+            {
+                foreach (var bookFormat in formatsJson.books)
+                {
+                    Console.WriteLine(bookFormat.extension);
+                    Console.WriteLine(bookFormat.href);
+                    extensionUrl = bookFormat.href;
+                    break;
+                }
+            }
+            var downloadUrl = $"https://webproxy.lumiproxy.com{extensionUrl}";
+            var downloadUrl2 = doc.DocumentNode.SelectSingleNode("//a[@class='addDownloadedBook premiumBtn']").GetAttributeValue("href", "");
+            Console.WriteLine(detailHtml);
+            Console.WriteLine($"下载地址1(多格式下载):{downloadUrl},下载地址2:{downloadUrl2}");
             List<Task> taskList = new List<Task>();
             var cookieContainer = new CookieContainer();
             cookieContainer.Add(new Cookie("__cryproxy",this.proxy) { Domain = "webproxy.lumiproxy.com" });
@@ -225,7 +258,7 @@ namespace EliorFoy.Zlibrary.CLI
             foreach(var book in books)
             {
                 var format = book.File.Split(",")[0].Trim().ToLower();
-                Console.WriteLine(downloadUrl);
+                
                 var task = downloadUrl
                 .WithHeader("cookie", $"remix_userid|1lib.sk={userId}; remix_userkey|1lib.sk={userKey}; __cryproxy={this.proxy}")
                 .WithTimeout(TimeSpan.FromMinutes(5))
@@ -325,3 +358,15 @@ namespace EliorFoy.Zlibrary.CLI
         }
     }
  }
+//public class BookFormat
+//{
+//    public int Id { get; set; }
+//    public string Extension { get; set; }
+//    public string FilesizeString { get; set; }
+//    public string Href { get; set; }
+//}
+//public class Response
+//{
+//    public int Success { get; set; }
+//    public List<BookFormat> Books { get; set; }
+//}
