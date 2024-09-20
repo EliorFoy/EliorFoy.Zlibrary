@@ -183,8 +183,12 @@ namespace EliorFoy.Zlibrary.CLI
             }
             
         }
-        public static async Task<UserAccount> GetUserAccount()
+        public static async Task<UserAccount> GetUserAccount(bool useOwnAccount=true)
         {
+            if(useOwnAccount)
+            {
+                return new UserAccount("35246529", "805952563b5da47b2e477aad04be3c9a");
+            }
             using (var db = new LiteDatabase(@"AccountPoolForOnce.db"))
             {
                 var collection = db.GetCollection<UserAccount>("users");
@@ -223,7 +227,7 @@ namespace EliorFoy.Zlibrary.CLI
         {
             Console.WriteLine($"开始下载{books[0].Title}");
             var detailHtml = books[0].RefUrl
-                .WithHeader("cookie", $"remix_userid|1lib.sk={userId} remix_userkey|1lib.sk={userKey}; __cryproxy=eyJVcmwiOiJodHRwczovL3poLjFsaWIuc2svIiwiQXJlYSI6IlVTIiwiS2V5IjoiUk5UR05LTU9sendJV3duT1o0UDhFIn0%3D")
+                .WithHeader("cookie", $"remix_userkey|1lib.sk={userKey}; remix_userid|1lib.sk={userId}; selectedSiteMode|1lib.sk=books; __cryproxy=={proxy}")
                 .WithTimeout(TimeSpan.FromHours(1))
                 .GetStringAsync().Result;
             var doc = new HtmlDocument();
@@ -231,7 +235,7 @@ namespace EliorFoy.Zlibrary.CLI
             var bookId = doc.DocumentNode.SelectSingleNode("//a[@class='btn btn-primary dlButton addDownloadedBook reader-link']").GetAttributeValue("data-book_id", "");
             Console.WriteLine(bookId);
             var formats = await $"https://webproxy.lumiproxy.com/papi/book/{bookId}/formats"
-                .WithHeader("cookie", $"remix_userid|1lib.sk={userId} remix_userkey|1lib.sk={userKey}; __cryproxy=eyJVcmwiOiJodHRwczovL3poLjFsaWIuc2svIiwiQXJlYSI6IlVTIiwiS2V5IjoiUk5UR05LTU9sendJV3duT1o0UDhFIn0%3D")
+                .WithHeader("cookie", $"remix_userid|1lib.sk={userId} remix_userkey|1lib.sk={userKey}; __cryproxy={this.proxy}")
                 .GetStringAsync();
             Console.WriteLine(formats);
             dynamic formatsJson = JsonConvert.DeserializeObject<dynamic>(formats);
@@ -246,10 +250,10 @@ namespace EliorFoy.Zlibrary.CLI
                     break;
                 }
             }
-            var downloadUrl = $"https://webproxy.lumiproxy.com{extensionUrl}";
-            var downloadUrl2 = doc.DocumentNode.SelectSingleNode("//a[@class='addDownloadedBook premiumBtn']").GetAttributeValue("href", "");
-            Console.WriteLine(detailHtml);
-            Console.WriteLine($"下载地址1(多格式下载):{downloadUrl},下载地址2:{downloadUrl2}");
+            var downloadUrl = extensionUrl!= null? $"https://webproxy.lumiproxy.com{extensionUrl}" : doc.DocumentNode.SelectSingleNode("//a[@class='addDownloadedBook premiumBtn']").GetAttributeValue("href", "");
+
+            if (detailHtml.Contains("登录")) { Console.WriteLine("登录不成功！"); }
+            Console.WriteLine($"下载地址:{downloadUrl}");
             List<Task> taskList = new List<Task>();
             var cookieContainer = new CookieContainer();
             cookieContainer.Add(new Cookie("__cryproxy",this.proxy) { Domain = "webproxy.lumiproxy.com" });

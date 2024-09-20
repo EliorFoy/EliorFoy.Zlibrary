@@ -1,8 +1,11 @@
-﻿using System;
+﻿using Flurl.Http;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static System.Net.WebRequestMethods;
+using Figgle;
 
 namespace EliorFoy.Zlibrary.CLI
 {
@@ -10,8 +13,15 @@ namespace EliorFoy.Zlibrary.CLI
     {
         static void Main()
         {
-
-            AccountPool.CreateAvaliableAccountPoolForOnce().Wait();
+            Console.WriteLine(FiggleFonts.Slant.Render("EliorFoy Zlibrary Tool"));
+    //        var detailHtml = "https://webproxy.lumiproxy.com/sencure/kescFDT9ECQp37fTiDI3Y"
+    //.WithHeader("cookie", $"remix_userkey|1lib.sk=805952563b5da47b2e477aad04be3c9a; remix_userid|1lib.sk=35246529; selectedSiteMode|1lib.sk=books; __cryproxy=eyJVcmwiOiJodHRwczovL3poLjFsaWIuc2svYm9vay8xMDQ3OTcyLzFjZGVjZC8lRTclOUYlQTklRTklOTglQjUlRTUlODglODYlRTYlOUUlOTAuaHRtbD9kc291cmNlPXJlY29tbWVuZCIsIkFyZWEiOiJVUyIsIktleSI6IktDeFFRWWN4OHJRaU9ERWNLUGxlTCJ9")
+    //.WithTimeout(TimeSpan.FromMinutes(5))
+    //.GetStringAsync().Result;
+    //        Console.WriteLine(detailHtml);
+    //        if (detailHtml.Contains("登录")) { Console.WriteLine("登录不成功！"); } else { Console.WriteLine("成功"); }
+    //        Console.ReadLine();
+            //AccountPool.CreateAvaliableAccountPoolForOnce().Wait();
             var account = AccountPool.GetUserAccount().Result;
             var downloader = new Downloader(account.Userid,account.UserKey);
             Console.WriteLine("创建一次性账号池成功");
